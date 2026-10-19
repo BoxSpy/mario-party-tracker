@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario Party Tracker - Public Leaderboard</title>
+    <style>
+        /* ---------- CUSTOM FONT ---------- */
+        @font-face {
+            font-family: 'AOTFShinGoProBold';
+            src: url('../assets/fonts/AOTFShinGoProBold.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        /* ---------- DARK MODE + RED-BLUE GRADIENT ---------- */
+        :root {
+            --bg-primary: #ff4b4b;
+            --bg-secondary: #4e9cff;
+            --card-bg: #1e1e1e;
+            --text-primary: #f0f0f0;
+            --text-secondary: #bbbbbb;
+            --border: #444;
+            --shadow: 0 8px 30px rgba(0,0,0,0.5);
+            --green: #66bb6a;
+            --gold: #ffd700;
+            --gold-dark: #ccae00;
+            --crown-width: 34px;
+            --crown-height: 34px;
+            --profile-pic-size: 70px;
+            --player-icon-size: 80px;
+            --star-coin-size: 20px;
+            --leaderboard-icon-size: 20px;
+            --leaderboard-text-size: 18px;
+            --char-icon-size: 36px;
+            --stat-padding: 16px;
+            --leaderboard-gap: 16px;
+            --leaderboard-padding: 24px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'AOTFShinGoProBold', 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--text-primary);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: clamp(24px, 5vw, 42px);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        /* ---------- LOADING / ERROR STATES ---------- */
+        .loading, .error {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            border: 5px solid var(--border);
+            border-top-color: var(--bg-secondary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .error h2 {
+            color: #e57373;
+            margin-bottom: 10px;
+        }
+
+        .error p {
+            color: var(--text-secondary);
+        }
+
+        /* ---------- SORTABLE TABLE HEADER ---------- */
+        .sort-header {
+            display: flex;
+            gap: var(--stat-padding);
+            padding: 12px;
+            background: var(--border);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            align-items: center;
+            user-select: none;
+        }
+
+        .sort-header span {
+            flex: 1;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .sort-header span:hover { color: var(--bg-secondary); }
+        .sort-active { color: var(--bg-primary) !important; }
+        .sort-header span.asc::after { content: ' ▲'; font-size: 10px; }
+        .sort-header span.desc::after { content: ' ▼'; font-size: 10px; }
+
+        /* ---------- TABLE COLUMNS ---------- */
+        .col-rank { min-width: 50px; flex: 0 0 50px; }
+        .col-player { min-width: 150px; flex: 1 1 150px; }
+        .col-games { min-width: 60px; flex: 0 0 60px; }
+        .col-wins { min-width: 60px; flex: 0 0 60px; }
+        .col-stars { min-width: 60px; flex: 0 0 60px; }
+        .col-coins { min-width: 80px; flex: 0 0 80px; }
+        .col-wr { min-width: 60px; flex: 0 0 60px; }
+        .col-nsp { min-width: 70px; flex: 0 0 70px; }
+        .col-avgpos { min-width: 70px; flex: 0 0 70px; }
+
+        /* ---------- LEADERBOARD ENTRIES ---------- */
+        .leaderboard-entries {
+            display: flex;
+            flex-direction: column;
+            gap: var(--leaderboard-gap);
+        }
+
+        .rank-entry {
+            display: flex;
+            align-items: center;
+            gap: var(--leaderboard-gap);
+            padding: var(--leaderboard-padding);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            transition: 0.2s;
+        }
+
+        .rank-entry:hover { border-color: var(--bg-secondary); }
+
+        .rank-num {
+            font-size: 32px;
+            font-weight: bold;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .rank-1 .rank-num { color: var(--gold); }
+        .rank-2 .rank-num { color: #c0c0c0; }
+        .rank-3 .rank-num { color: #cd7f32; }
+
+        .player-icon {
+            width: var(--player-icon-size);
+            height: var(--player-icon-size);
+            border-radius: 50%;
+            background-size: cover;
+            background-color: #333;
+            border: 4px solid var(--card-bg);
+            box-shadow: 0 6px 16px rgba(0,0,0,.3);
+            flex-shrink: 0;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .player-info {
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .player-name {
+            font-weight: bold;
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .player-characters {
+            display: flex;
+            gap: 4px;
+        }
+
+        .char-icon {
+            width: var(--char-icon-size);
+            height: var(--char-icon-size);
+            border-radius: 50%;
+            background-size: cover;
+            background-color: #333;
+            border: 2px solid var(--border);
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .stats {
+            display: flex;
+            gap: var(--stat-padding);
+            font-size: var(--leaderboard-text-size);
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .stat-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            min-width: 80px;
+            justify-content: center;
+        }
+
+        .stat-group img {
+            width: var(--leaderboard-icon-size);
+            height: var(--leaderboard-icon-size);
+        }
+
+        .stat-group.blank { opacity: 0.3; }
+
+        /* NSP Color Coding */
+        .stat-nsp { font-weight: bold; }
+        .stat-nsp.pos { color: var(--green); }
+        .stat-nsp.neg { color: #e57373; }
+        .stat-nsp.neutral { color: var(--text-secondary); }
+
+        /* ---------- FOOTER ---------- */
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: var(--bg-secondary);
+            text-decoration: none;
+        }
+
+        /* ---------- RESPONSIVE DESIGN ---------- */
+        @media (max-width: 1200px) {
+            .container { padding: 16px; }
+            .stats { gap: 10px; }
+            .stat-group { min-width: 60px; font-size: 14px; }
+        }
+
+        @media (max-width: 900px) {
+            body { padding: 10px; }
+            .rank-entry {
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 16px;
+            }
+            .player-icon { width: 60px; height: 60px; }
+            .player-name { font-size: 20px; }
+            .stats { gap: 8px; }
+            .stat-group { min-width: 50px; font-size: 13px; }
+            .col-rank, .col-games, .col-wins, .col-stars,
+            .col-coins, .col-wr, .col-nsp, .col-avgpos {
+                min-width: 50px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .header h1 { font-size: 24px; }
+            .container { padding: 12px; border-radius: 12px; }
+            .sort-header {
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 8px;
+            }
+            .sort-header span { flex: 0 1 auto; font-size: 12px; }
+            .rank-entry { padding: 12px; gap: 8px; }
+            .player-icon { width: 50px; height: 50px; }
+            .player-name { font-size: 16px; }
+            .stats { flex-wrap: wrap; gap: 6px; }
+            .stat-group { font-size: 12px; min-width: 40px; }
+            .stat-group img { width: 14px; height: 14px; }
+            .rank-num { font-size: 24px; min-width: 35px; }
+            .char-icon { width: 28px; height: 28px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Mario Party Tracker</h1>
+        <p>Public Leaderboard</p>
+    </div>
+
+    <div class="container" id="app">
+        <!-- Loading state shown by default -->
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading leaderboard...</p>
+        </div>
+
+        <!-- Error state (hidden by default) -->
+        <div class="error" id="error" style="display:none;">
+            <div class="error-icon">🎮</div>
+            <h2>Failed to Load</h2>
+            <p id="error-message">Could not fetch scores.json. Make sure the file exists in the same directory.</p>
+        </div>
+
+        <!-- Leaderboard (hidden by default) -->
+        <div id="leaderboard-container" style="display:none;">
+            <!-- Sort header -->
+            <div class="sort-header" id="sort-header">
+                <span class="col-rank" data-sort="rank">Rank</span>
+                <span class="col-player" data-sort="name">Player</span>
+                <span class="col-games" data-sort="games">Games</span>
+                <span class="col-wins" data-sort="wins">Wins</span>
+                <span class="col-stars" data-sort="stars">Stars</span>
+                <span class="col-coins" data-sort="coins">Coins</span>
+                <span class="col-wr" data-sort="wr">Win %</span>
+                <span class="col-nsp" data-sort="nsp">NSP</span>
+                <span class="col-avgpos" data-sort="avgPos">Avg Pos</span>
+            </div>
+
+            <!-- Leaderboard entries -->
+            <div class="leaderboard-entries" id="leaderboard"></div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Mario Party Tracker &bull; Data from <a href="scores.json" target="_blank">scores.json</a></p>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        // ========== STATE ==========
+        let allStats = []; // Array of {name, games, wins, stars, coins, avgPos, wr, nspDisplay, nspClass, topChars, profilePath}
+        let currentSort = { key: 'avgPos', dir: 'asc' }; // Default: best avgPos first (ascending = lower is better)
+
+        // ========== FALLBACK DATA ==========
+        const FALLBACK_DATA = {
+            players: ['Matt', 'Callum', 'Carson', 'Carter', 'Dylan', 'Gus', 'Jack', 'Josh', 'Noah', 'Tyler'],
+            playerProfiles: {
+                'Matt': 'players/Matt.png',
+                'Callum': 'players/Callum.png',
+                'Carson': 'players/Carson.png',
+                'Carter': 'players/Carter.png',
+                'Dylan': 'players/Dylan.png',
+                'Gus': 'players/Gus.png',
+                'Jack': 'players/Jack.png',
+                'Josh': 'players/Josh.png',
+                'Noah': 'players/Noah.png',
+                'Tyler': 'players/Tyler.png'
+            },
+            characters: {
+                'Mario': 'characters/Mario.png',
+                'Luigi': 'characters/Luigi.png',
+                'Peach': 'characters/Peach.png',
+                'Toad': 'characters/Toad.png',
+                'Yoshi': 'characters/Yoshi.png',
+                'Bowser': 'characters/Bowser.png',
+                'Wario': 'characters/Wario.png',
+                'Waluigi': 'characters/Waluigi.png',
+                'Daisy': 'characters/Daisy.png',
+                'Rosalina': 'characters/Rosalina.png'
+            },
+            games: []
+        };
+
+        // ========== ASSET PATHS ==========
+        const ASSETS_PATH = '../assets/';
+        const PLAYERS_PATH = '../players/';
+        const CHARACTERS_PATH = '../characters/';
+
+        // ========== DOM REFERENCES ==========
+        const loadingEl = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const errorMessageEl = document.getElementById('error-message');
+        const leaderboardContainerEl = document.getElementById('leaderboard-container');
+        const leaderboardEl = document.getElementById('leaderboard');
+        const sortHeaderEl = document.getElementById('sort-header');
+
+        // ========== FETCH DATA ==========
+        async function fetchData() {
+            try {
+                const response = await fetch('scores.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.warn('Failed to fetch scores.json, using fallback:', error.message);
+                return null;
+            }
+        }
+
+        // ========== PROFILE / CHARACTER / MAP URL HELPERS ==========
+        function getProfileUrl(name, playerProfiles) {
+            if (name === 'A.I') return ASSETS_PATH + 'robot.png';
+            if (name === 'Unknown') return ASSETS_PATH + 'unknown.png';
+            const url = playerProfiles[name];
+            return url || ASSETS_PATH + 'player-placeholder.png';
+        }
+
+        function getCharUrl(char, characters) {
+            if (char === 'Unknown') return ASSETS_PATH + 'unknown.png';
+            const url = characters[char];
+            return url || ASSETS_PATH + 'char-placeholder.png';
+        }
+
+        // ========== STAT CALCULATION ==========
+        function shouldCountForHumanStats(game) {
+            if (game.countForStats === false) return false;
+            return !game.players.some(p => p.name === 'A.I' || p.name === 'Unknown');
+        }
+
+        function computeStats(data) {
+            const players = data.players || FALLBACK_DATA.players;
+            const playerProfiles = data.playerProfiles || FALLBACK_DATA.playerProfiles;
+            const characters = data.characters || FALLBACK_DATA.characters;
+            const games = data.games || [];
+
+            // Filter games for human stats
+            const humanStatsGames = games.filter(shouldCountForHumanStats);
+
+            // Step 1: Calculate NSP baselines
+            let globalStars = 0;
+            let globalSlots = 0;
+            const boardData = {};
+
+            humanStatsGames.forEach(g => {
+                if (!boardData[g.map]) boardData[g.map] = { stars: 0, slots: 0, gameCount: 0 };
+                boardData[g.map].gameCount++;
+
+                g.players.forEach(p => {
+                    globalStars += p.stars;
+                    globalSlots++;
+                    boardData[g.map].stars += p.stars;
+                    boardData[g.map].slots++;
+                });
+            });
+
+            const globalAvg = globalSlots > 0 ? globalStars / globalSlots : 0;
+            const boardAdjAvgs = {};
+
+            Object.keys(boardData).forEach(map => {
+                const d = boardData[map];
+                const rawAvg = d.slots > 0 ? d.stars / d.slots : 0;
+                const count = d.gameCount;
+
+                if (count >= 4) {
+                    boardAdjAvgs[map] = rawAvg;
+                } else {
+                    let wGlobal = 0;
+                    if (count === 1) wGlobal = 0.80;
+                    else if (count === 2) wGlobal = 0.50;
+                    else if (count === 3) wGlobal = 0.25;
+
+                    boardAdjAvgs[map] = (globalAvg * wGlobal) + (rawAvg * (1 - wGlobal));
+                }
+            });
+
+            // Step 2: Initialize stats per player
+            const stats = {};
+            players.forEach(n => {
+                stats[n] = {
+                    games: 0, wins: 0, stars: 0, coins: 0, pos: [],
+                    nspSum: 0, nspCount: 0, topChars: []
+                };
+            });
+
+            // Step 3: Accumulate stats per game
+            humanStatsGames.forEach(g => {
+                const human = g.players;
+                const adjAvg = boardAdjAvgs[g.map] || globalAvg;
+
+                // Accumulate individual player stats
+                human.forEach(p => {
+                    const s = stats[p.name];
+                    if (!s) return;
+                    s.games++;
+                    s.stars += p.stars;
+                    s.coins += p.coins;
+                    if (p.tieWin) s.wins++;
+
+                    // NSP Calculation
+                    if (adjAvg > 0) {
+                        const perf = p.stars / adjAvg;
+                        s.nspSum += perf;
+                        s.nspCount++;
+                    }
+                });
+
+                // Position calculation with fractional tie-breaking
+                const sorted = [...human].sort((a, b) => b.stars - a.stars || b.coins - a.coins);
+
+                let currentPos = 1;
+                for (let i = 0; i < sorted.length; i++) {
+                    let j = i;
+                    while (j < sorted.length &&
+                           sorted[j].stars === sorted[i].stars &&
+                           sorted[j].coins === sorted[i].coins) {
+                        j++;
+                    }
+
+                    const tieSize = j - i;
+                    const avgRank = (currentPos + (currentPos + tieSize - 1)) / 2;
+
+                    for (let k = i; k < j; k++) {
+                        const s = stats[sorted[k].name];
+                        if (s) s.pos.push(avgRank);
+                    }
+
+                    i = j - 1;
+                    currentPos += tieSize;
+                }
+            });
+
+            // Step 4: Finalize stats
+            const result = [];
+            Object.entries(stats).forEach(([name, s]) => {
+                if (s.games === 0) {
+                    // Still include players with 0 games but show zeros
+                }
+
+                s.avgPos = s.pos.length ? s.pos.reduce((a, b) => a + b, 0) / s.pos.length : '-';
+                s.wr = s.games ? Math.round((s.wins / s.games) * 100) + '%' : '0%';
+
+                // NSP
+                if (s.nspCount > 0) {
+                    const avgPerf = s.nspSum / s.nspCount;
+                    s.nspRaw = avgPerf;
+                    s.nspDisplay = Math.round((avgPerf - 1.0) * 100);
+                } else {
+                    s.nspRaw = -999;
+                    s.nspDisplay = 0;
+                }
+
+                // Character usage (all games)
+                const ch = {};
+                games.forEach(g => {
+                    const p = g.players.find(p => p.name === name);
+                    if (p && p.char && p.char !== 'Unknown') ch[p.char] = (ch[p.char] || 0) + 1;
+                });
+                s.topChars = Object.entries(ch)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 2)
+                    .map(e => e[0]);
+
+                // Profile path
+                s.profilePath = getProfileUrl(name, playerProfiles);
+
+                // NSP display class
+                if (s.nspCount > 0) {
+                    s.nspClass = s.nspDisplay > 0 ? 'pos' : (s.nspDisplay < 0 ? 'neg' : 'neutral');
+                } else {
+                    s.nspClass = 'neutral';
+                }
+
+                result.push(s);
+                result[result.length - 1].name = name;
+            });
+
+            return result;
+        }
+
+        // ========== SORTING ==========
+        function sortLeaderboard(stats) {
+            const key = currentSort.key;
+            const dir = currentSort.dir;
+            const multiplier = dir === 'asc' ? 1 : -1;
+
+            return stats.slice().sort((a, b) => {
+                let diff = 0;
+
+                switch (key) {
+                    case 'avgPos':
+                        diff = (Number.isFinite(a.avgPos) ? a.avgPos : Infinity) -
+                               (Number.isFinite(b.avgPos) ? b.avgPos : Infinity);
+                        break;
+                    case 'games':
+                        diff = a.games - b.games;
+                        break;
+                    case 'wins':
+                        diff = a.wins - b.wins;
+                        break;
+                    case 'stars':
+                        diff = a.stars - b.stars;
+                        break;
+                    case 'coins':
+                        diff = a.coins - b.coins;
+                        break;
+                    case 'wr':
+                        diff = (parseFloat(a.wr) || 0) - (parseFloat(b.wr) || 0);
+                        break;
+                    case 'nsp':
+                        diff = a.nspRaw - b.nspRaw;
+                        break;
+                    case 'name':
+                        diff = a.name.localeCompare(b.name);
+                        break;
+                    default:
+                        diff = 0;
+                }
+
+                return diff * multiplier;
+            });
+        }
+
+        // ========== RANK ORDINAL ==========
+        function getRankOrdinal(rank) {
+            const i = rank;
+            const j = i % 10;
+            const k = i % 100;
+            if (j === 1 && k !== 11) return 'st';
+            if (j === 2 && k !== 12) return 'nd';
+            if (j === 3 && k !== 13) return 'rd';
+            return 'th';
+        }
+
+        // ========== RENDER ==========
+        function renderLeaderboard() {
+            const sorted = sortLeaderboard(allStats);
+
+            leaderboardEl.innerHTML = sorted.map((s, i) => {
+                const rank = i + 1;
+                const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                const rankStr = getRankOrdinal(rank);
+                const avgPosStr = Number.isFinite(s.avgPos) ? s.avgPos.toFixed(1) : '—';
+
+                // NSP string
+                let nspStr = '—';
+                if (s.nspCount > 0) {
+                    const val = s.nspDisplay;
+                    nspStr = val > 0 ? `+${val}%` : `${val}%`;
+                }
+
+                // Character icons
+                const charIconsHtml = s.topChars.map(c => {
+                    const charUrl = getCharUrl(c, data?.characters || FALLBACK_DATA.characters);
+                    return `<div class="char-icon" style="background-image:url('${charUrl}')"></div>`;
+                }).join('');
+
+                return `
+                    <div class="rank-entry ${rankClass}">
+                        <span class="rank-num">#${rank}${rankStr}</span>
+                        <div class="player-icon" style="background-image:url('${s.profilePath}')"></div>
+                        <div class="player-info">
+                            <div class="player-name">${s.name}</div>
+                            <div class="player-characters">${charIconsHtml}</div>
+                        </div>
+                        <div class="stats">
+                            <div class="stat-group ${s.games === 0 ? 'blank' : ''}">
+                                <img src="${ASSETS_PATH}game-icon.png" alt="Games"> x${s.games}
+                            </div>
+                            <div class="stat-group ${s.games === 0 ? 'blank' : ''}">
+                                <img src="${ASSETS_PATH}crown.png" alt="Wins"> x${s.wins}
+                            </div>
+                            <div class="stat-group ${s.games === 0 ? 'blank' : ''}">
+                                <img src="${ASSETS_PATH}star.png" alt="Stars"> x${s.stars}
+                            </div>
+                            <div class="stat-group ${s.games === 0 ? 'blank' : ''}">
+                                <img src="${ASSETS_PATH}coin.png" alt="Coins"> x${s.coins}
+                            </div>
+                            <div class="stat-group ${s.games === 0 ? 'blank' : ''}">${s.wr}</div>
+                            <div class="stat-group stat-nsp ${s.nspClass} ${s.games === 0 ? 'blank' : ''}" title="Normalized Star Performance">${nspStr}</div>
+                            <div class="stat-group ${s.games === 0 ? 'blank' : ''}">${avgPosStr}</div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        // ========== SHOW/HIDE STATES ==========
+        function showLoading() {
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            leaderboardContainerEl.style.display = 'none';
+        }
+
+        function showError(message) {
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'block';
+            leaderboardContainerEl.style.display = 'none';
+            if (message) {
+                errorMessageEl.textContent = message;
+            }
+        }
+
+        function showLeaderboard() {
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'none';
+            leaderboardContainerEl.style.display = 'block';
+        }
+
+        // ========== SORT HANDLER ==========
+        function handleSort(sortKey) {
+            if (currentSort.key === sortKey) {
+                // Toggle direction
+                currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.key = sortKey;
+                // Set smart default direction
+                if (sortKey === 'name') {
+                    currentSort.dir = 'asc';
+                } else {
+                    currentSort.dir = 'desc'; // Higher is better for numeric fields
+                }
+            }
+
+            // Update UI indicators
+            const sortSpans = sortHeaderEl.querySelectorAll('span');
+            sortSpans.forEach(span => {
+                span.classList.remove('sort-active', 'asc', 'desc');
+                if (span.dataset.sort === sortKey) {
+                    span.classList.add('sort-active', currentSort.dir);
+                }
+            });
+
+            renderLeaderboard();
+        }
+
+        // ========== INITIALIZE ==========
+        let data = null;
+
+        async function init() {
+            showLoading();
+
+            data = await fetchData();
+
+            if (!data) {
+                console.warn('Using fallback data for demo purposes');
+                // Use fallback - empty games means all zeros
+                allStats = computeStats(FALLBACK_DATA);
+            } else {
+                allStats = computeStats(data);
+            }
+
+            showLeaderboard();
+
+            // Set initial sort indicator
+            handleSort(currentSort.key);
+            // Reset to not toggle on first click
+            const sortSpans = sortHeaderEl.querySelectorAll('span');
+            sortSpans.forEach(span => {
+                span.classList.remove('sort-active', 'asc', 'desc');
+                if (span.dataset.sort === currentSort.key) {
+                    span.classList.add('sort-active', currentSort.dir);
+                }
+            });
+        }
+
+        // ========== EVENT LISTENERS ==========
+        sortHeaderEl.addEventListener('click', (e) => {
+            const sortSpan = e.target.closest('[data-sort]');
+            if (sortSpan) {
+                handleSort(sortSpan.dataset.sort);
+            }
+        });
+
+        // ========== START ==========
+        init();
+    })();
+    </script>
+</body>
+</html>
